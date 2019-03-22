@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/go-chi/render"
 	"log"
-	"math/rand"
 	"net/http"
 	"time"
 )
@@ -26,9 +25,12 @@ type bill struct {
 	InvoiceNumber string         `json:"invoiceNumber"`
 	DueDate       string         `json:"dueDate"`
 	BillLineItems []billLineItem `json:"billLineItems"`
+	CustomerId    string         `json:"customerId"`
 }
 
-func getMockBill(item bill) JSON {
+var billList []*JSON
+
+func getMockBill(item bill) *JSON {
 	modifyTime := time.Now().UTC().Format("2006-01-02T15:04:05.000-0700")
 	billLineItems := make([]JSON, 0)
 	billLineItems = append(billLineItems, JSON{
@@ -38,7 +40,7 @@ func getMockBill(item bill) JSON {
 		"chartOfAccountId": item.BillLineItems[0].ChartOfAccountId,
 		"billId":           item.ID,
 		"entity":           "BillLineItem",
-		"customerId":       "00000000000000000000",
+		"customerId":       item.CustomerId,
 		"employeeId":       "00000000000000000000",
 		"amount":           item.BillLineItems[0].Amount,
 		"locationId":       "00000000000000000000",
@@ -52,7 +54,7 @@ func getMockBill(item bill) JSON {
 		"id":               item.BillLineItems[0].ID,
 		"quantity":         item.BillLineItems[0].Quantity,
 	})
-	return JSON{
+	return &JSON{
 		"vendorId":                item.VendorId,
 		"invoiceDate":             item.InvoiceDate,
 		"dueAmount":               item.BillLineItems[0].Amount,
@@ -82,6 +84,11 @@ func getMockBill(item bill) JSON {
 	}
 }
 
+// POST /List/Bill.json returns an empty search response
+func (s *Rest) billListCtrl(w http.ResponseWriter, r *http.Request) {
+	render.JSON(w, r, createResponse(billList))
+}
+
 // POST /Crud/Read/Bill.json returns a bill attributes as well as bill line item attributes
 func (s *Rest) billReadCtrl(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -96,32 +103,10 @@ func (s *Rest) billReadCtrl(w http.ResponseWriter, r *http.Request) {
 		log.Println("[ERROR] Can't parse request data")
 		return
 	}
-	rand.Seed(time.Now().UnixNano())
-	item := bill{
-		ID:            postData.ID,
-		VendorId:      RandStringBytes(20),
-		Description:   "Test",
-		InvoiceDate:   "2010-01-01",
-		InvoiceNumber: "Test_Jan_01",
-		DueDate:       "2010-01-01",
-		BillLineItems: []billLineItem{
-			{
-				ID:               RandStringBytes(20),
-				ChartOfAccountId: RandStringBytes(20),
-				BillId:           postData.ID,
-				Amount:           float64(rand.Intn(1000)),
-				ActgClassId:      RandStringBytes(20),
-				Quantity:         1,
-			},
-		},
-	}
 
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    getMockBill(item),
-	}
-	render.JSON(w, r, vendorResponse)
+	billItem := findInJSONList(postData.ID, billList)
+
+	render.JSON(w, r, createResponse(billItem))
 }
 
 // POST /Crud/Create/Bill.json creates a bill
@@ -142,12 +127,10 @@ func (s *Rest) billCreateCtrl(w http.ResponseWriter, r *http.Request) {
 	postData.Bill.ID = RandStringBytes(20)
 	postData.Bill.BillLineItems[0].ID = RandStringBytes(20)
 
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    getMockBill(postData.Bill),
-	}
-	render.JSON(w, r, vendorResponse)
+	billItem := getMockBill(postData.Bill)
+	billList = append(billList, billItem)
+
+	render.JSON(w, r, createResponse(billItem))
 }
 
 // POST /Crud/Update/Bill.json or /Crud/Delete/Bill.json returns a bill attributes
@@ -165,11 +148,11 @@ func (s *Rest) billUpdateCtrl(w http.ResponseWriter, r *http.Request) {
 		log.Println("[ERROR] Can't parse request data")
 		return
 	}
+
 	postData.Bill.BillLineItems[0].ID = RandStringBytes(20)
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    getMockBill(postData.Bill),
-	}
-	render.JSON(w, r, vendorResponse)
+
+	billItem := findInJSONList(postData.Bill.ID, billList)
+	*billItem = *getMockBill(postData.Bill)
+
+	render.JSON(w, r, createResponse(billItem))
 }

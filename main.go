@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -78,29 +77,56 @@ func (s *Rest) routes() chi.Router {
 	router.Use(middleware.Logger)
 	router.Route("/api/v2", func(rapi chi.Router) {
 		// Login & Logout
-		rapi.Group(func(rlogin chi.Router) {
-			rlogin.Post("/Login.json", s.loginCtrl)
-			rlogin.Post("/Logout.json", s.logoutCtrl)
+		rapi.Group(func(r chi.Router) {
+			r.Post("/Login.json", s.loginCtrl)
+			r.Post("/Logout.json", s.logoutCtrl)
 		})
 		// Actg
-		rapi.Group(func(rActg chi.Router) {
-			rActg.Post("/List/ActgClass.json", s.actgClassListCtrl)
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/ActgClass.json", s.actgClassListCtrl)
+			r.Post("/Crud/Create/ActgClass.json", s.actgClassCreateCtrl)
+			r.Post("/Crud/Read/ActgClass.json", s.actgClassReadCtrl)
+			r.Post("/Crud/Update/ActgClass.json", s.actgClassUpdateCtrl)
 		})
 		// Vendor
-		rapi.Group(func(rVendor chi.Router) {
-			rVendor.Post("/List/Vendor.json", s.vendorListCtrl)
-			rVendor.Post("/Crud/Create/Vendor.json", s.vendorCreateCtrl)
-			rVendor.Post("/Crud/Read/Vendor.json", s.vendorReadCtrl)
-			rVendor.Post("/Crud/Update/Vendor.json", s.vendorUpdateCtrl)
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/Vendor.json", s.vendorListCtrl)
+			r.Post("/Crud/Create/Vendor.json", s.vendorCreateCtrl)
+			r.Post("/Crud/Read/Vendor.json", s.vendorReadCtrl)
+			r.Post("/Crud/Update/Vendor.json", s.vendorUpdateCtrl)
+		})
+		// Customer
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/Customer.json", s.customerListCtrl)
+			r.Post("/Crud/Create/Customer.json", s.customerCreateCtrl)
+			r.Post("/Crud/Read/Customer.json", s.customerReadCtrl)
+			r.Post("/Crud/Update/Customer.json", s.customerUpdateCtrl)
+		})
+		// Invoice
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/Invoice.json", s.invoiceListCtrl)
+			r.Post("/Crud/Create/Invoice.json", s.invoiceCreateCtrl)
+			r.Post("/Crud/Read/Invoice.json", s.invoiceReadCtrl)
+			r.Post("/Crud/Update/Invoice.json", s.invoiceUpdateCtrl)
 		})
 		// Bill
-		rapi.Group(func(rVendor chi.Router) {
-			rVendor.Post("/Crud/Read/Bill.json", s.billReadCtrl)
-			rVendor.Post("/Crud/Create/Bill.json", s.billCreateCtrl)
-			rVendor.Post("/Crud/Delete/Bill.json", s.billReadCtrl)
-			rVendor.Post("/Crud/Update/Bill.json", s.billUpdateCtrl)
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/Bill.json", s.billListCtrl)
+			r.Post("/Crud/Read/Bill.json", s.billReadCtrl)
+			r.Post("/Crud/Create/Bill.json", s.billCreateCtrl)
+			r.Post("/Crud/Delete/Bill.json", s.billReadCtrl)
+			r.Post("/Crud/Update/Bill.json", s.billUpdateCtrl)
+		})
+		// RecurringBill
+		rapi.Group(func(r chi.Router) {
+			r.Post("/List/RecurringBill.json", s.recurringBillListCtrl)
+			r.Post("/Crud/Read/RecurringBill.json", s.recurringBillReadCtrl)
+			r.Post("/Crud/Create/RecurringBill.json", s.recurringBillCreateCtrl)
+			r.Post("/Crud/Delete/RecurringBill.json", s.recurringBillReadCtrl)
+			r.Post("/Crud/Update/RecurringBill.json", s.recurringBillUpdateCtrl)
 		})
 	})
+
 	router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -109,61 +135,128 @@ func (s *Rest) routes() chi.Router {
 	return router
 }
 
-// POST /Login.json returns the login response
-func (s *Rest) loginCtrl(w http.ResponseWriter, r *http.Request) {
-	loginResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data": JSON{
-			"apiEndPoint": "https://api-mock.bill.com/api/v2",
-			"usersId":     RandStringBytes(20),
-			"sessionId":   RandStringBytes(45),
-			"orgId":       RandStringBytes(20),
+func findInJSONList(id string, list []*JSON) *JSON {
+	for _, item := range list {
+		if (*item)["id"].(string) == id {
+			return item
+		}
+	}
+
+	return nil
+}
+
+func getJSONElement(id int64, list []*JSON) JSON {
+	return *list[id]
+}
+
+func createResponse(data interface{}) JSON {
+	status := 0
+	message := "Success"
+
+	if data == nil {
+		status = 1
+		message = "Error"
+	}
+
+	return JSON{
+		"response_status":  status,
+		"response_message": message,
+		"response_data":    data,
+	}
+}
+
+func fillLists() {
+	actgClassList = append(actgClassList, getMockActgClass(actgClass{
+		Name: "MockActgClasName",
+	}))
+
+	customersList = append(customersList, getMockCustomer(customer{
+		Id:          RandStringBytes(20),
+		Description: "First Customer",
+		Phone:       "+1234567890",
+		Email:       "customer+1@example.com",
+		CompanyName: "ASD Inc,",
+		Name:        "First Customer",
+		ShortName:   "First",
+	}))
+
+	customersList = append(customersList, getMockCustomer(customer{
+		Id:          RandStringBytes(20),
+		Description: "Second Customer",
+		Phone:       "+1234567890",
+		Email:       "customer+2@example.com",
+		CompanyName: "ASD Inc,",
+		Name:        "Second Customer",
+		ShortName:   "Second",
+	}))
+
+	vendorsList = append(vendorsList, getMockVendor(vendor{
+		Name:           "Customer 1",
+		Email:          "test@vemdor.com",
+		Phone:          "+1234567890",
+		Address1:       "In the middle of the world",
+		AddressCity:    "Neverlands",
+		AddressCountry: "Neveros",
+		AddressState:   "Neverland",
+		ID:             RandStringBytes(20),
+	}))
+
+	vendorsList = append(vendorsList, getMockVendor(vendor{
+		Name:           "Customer 2",
+		Email:          "test+2@vemdor.com",
+		Phone:          "+1234567890",
+		Address1:       "In the middle of the world",
+		AddressCity:    "Neverlands",
+		AddressCountry: "Neveros",
+		AddressState:   "Neverland",
+		ID:             RandStringBytes(20),
+	}))
+
+	billId := RandStringBytes(20)
+	billList = append(billList, getMockBill(bill{
+		ID:            billId,
+		Description:   "Bill some description",
+		InvoiceDate:   "2010-01-01",
+		InvoiceNumber: "Test_Jan_01",
+		DueDate:       "2010-01-01",
+		VendorId:      getJSONElement(0, vendorsList)["id"].(string),
+		CustomerId:    getJSONElement(0, customersList)["id"].(string),
+		BillLineItems: []billLineItem{
+			{
+				ID:               RandStringBytes(20),
+				ChartOfAccountId: RandStringBytes(20),
+				BillId:           billId,
+				Amount:           float64(rand.Intn(1000)),
+				ActgClassId:      getJSONElement(0, actgClassList)["id"].(string),
+				Quantity:         1,
+			},
 		},
-	}
-	render.JSON(w, r, loginResponse)
-}
+	}))
+	billId = RandStringBytes(20)
+	billList = append(billList, getMockBill(bill{
+		ID:            billId,
+		Description:   "Bill second description",
+		InvoiceDate:   "2010-01-01",
+		InvoiceNumber: "Test_Jan_01",
+		DueDate:       "2010-01-01",
+		VendorId:      getJSONElement(1, vendorsList)["id"].(string),
+		CustomerId:    getJSONElement(1, customersList)["id"].(string),
+		BillLineItems: []billLineItem{
+			{
+				ID:               RandStringBytes(20),
+				ChartOfAccountId: RandStringBytes(20),
+				BillId:           billId,
+				Amount:           float64(rand.Intn(1000)),
+				ActgClassId:      getJSONElement(0, actgClassList)["id"].(string),
+				Quantity:         1,
+			},
+		},
+	}))
 
-// POST /Logout.json returns the logout response
-func (s *Rest) logoutCtrl(w http.ResponseWriter, r *http.Request) {
-	loginResponse := JSON{
-		"response_status": 0, "response_message": "Success", "response_data": JSON{},
-	}
-	render.JSON(w, r, loginResponse)
-}
-
-// POST /List/ActgClass.json search class by name
-func (s *Rest) actgClassListCtrl(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		log.Println("[ERROR] Can't parse request data")
-		return
-	}
-	var data JSON
-	err := json.Unmarshal([]byte(r.FormValue("data")), &data)
-	if err != nil {
-		log.Println("[ERROR] Can't parse request data")
-		return
-	}
-	campaignName := data["filters"].([]interface{})[0].(map[string]interface{})["value"]
-	classList := make([]JSON, 0)
-	classList = append(classList, JSON{
-		"updatedTime":       "2019-01-30T08:05:20.000+0000",
-		"parentActgClassId": fmt.Sprintf("cls%s", RandStringBytes(17)),
-		"name":              campaignName,
-		"mergedIntoId":      "00000000000000000000",
-		"entity":            "ActgClass",
-		"createdTime":       "2019-01-30T08:05:20.000+0000",
-		"shortName":         "",
-		"id":                fmt.Sprintf("cls%s", RandStringBytes(17)),
-		"isActive":          "1",
-		"description":       "",
-	})
-	actgClassResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    classList,
-	}
-	render.JSON(w, r, actgClassResponse)
+	invoicesList = append(invoicesList, getMockInvoice(invoice{
+		ActgClassId: getJSONElement(0, actgClassList)["id"].(string),
+		Description: "Test Invoice Description",
+	}))
 }
 
 func main() {
@@ -173,6 +266,8 @@ func main() {
 	if _, e := p.ParseArgs(os.Args[1:]); e != nil {
 		os.Exit(1)
 	}
+
+	fillLists()
 
 	restSrv := &Rest{
 		Version: VERSION,

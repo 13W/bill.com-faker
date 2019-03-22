@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-func getMockVendor(item vendor) JSON {
+func getMockVendor(item vendor) *JSON {
 	modifyTime := time.Now().UTC().Format("2006-01-02T15:04:05.000-0700")
-	return JSON{
+	return &JSON{
 		"sendNotifications":      true,
 		"mergedIntoId":           "00000000000000000000",
 		"taxId":                  "",
@@ -71,14 +71,11 @@ type vendor struct {
 	Address1       string `json:"address1"`
 }
 
+var vendorsList []*JSON
+
 // POST /List/Vendor.json returns an empty search response
 func (s *Rest) vendorListCtrl(w http.ResponseWriter, r *http.Request) {
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    make([]JSON, 0),
-	}
-	render.JSON(w, r, vendorResponse)
+	render.JSON(w, r, createResponse(vendorsList))
 }
 
 // POST /Crud/Read/Vendor.json returns a vendor attributes
@@ -93,16 +90,10 @@ func (s *Rest) vendorReadCtrl(w http.ResponseWriter, r *http.Request) {
 		log.Println("[ERROR] Can't parse request data")
 		return
 	}
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data": getMockVendor(vendor{
-			ID:    vendorData["id"].(string),
-			Email: "fake@mail.com",
-			Name:  "Test Vendor",
-		}),
-	}
-	render.JSON(w, r, vendorResponse)
+
+	vendorItem := findInJSONList(vendorData["id"].(string), vendorsList)
+
+	render.JSON(w, r, createResponse(vendorItem))
 }
 
 // POST /Crud/Update/Vendor.json returns an updated vendor attributes
@@ -120,12 +111,11 @@ func (s *Rest) vendorUpdateCtrl(w http.ResponseWriter, r *http.Request) {
 		log.Println("[ERROR] Can't parse request data")
 		return
 	}
-	vendorResponse := JSON{
-		"response_status":  0,
-		"response_message": "Success",
-		"response_data":    getMockVendor(postData.Vendor),
-	}
-	render.JSON(w, r, vendorResponse)
+
+	vendorItem := findInJSONList(postData.Vendor.ID, vendorsList)
+	*vendorItem = *getMockVendor(postData.Vendor)
+
+	render.JSON(w, r, createResponse(vendorItem))
 }
 
 // POST /Crud/Create/Vendor.json creates a vendor and returns a vendor attributes
@@ -144,10 +134,13 @@ func (s *Rest) vendorCreateCtrl(w http.ResponseWriter, r *http.Request) {
 	}
 	postData.Vendor.ID = RandStringBytes(20)
 
+	vendorItem := getMockVendor(postData.Vendor)
+	vendorsList = append(vendorsList, vendorItem)
 	vendorResponse := JSON{
 		"response_status":  0,
 		"response_message": "Success",
-		"response_data":    getMockVendor(postData.Vendor),
+		"response_data":    vendorItem,
 	}
+
 	render.JSON(w, r, vendorResponse)
 }
